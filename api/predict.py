@@ -105,8 +105,23 @@ def predict_one(company_description):
     pred_prob_y5 = float(torch.max(out["probs5"], dim=1).values[0].cpu().item())
     pred_prob_y6 = float(torch.max(out["probs6"], dim=1).values[0].cpu().item())
 
-    top5_idx = out["top5_idx"][0].cpu().numpy().tolist()
-    pred_top5_y6 = [label_maps["y6"]["to_value"][int(i)] for i in top5_idx]
+    probs6 = out["probs6"][0].cpu().numpy()
+    top_idx = probs6.argsort()[::-1]
+    
+    pred_top5_y6 = []
+    for i in top_idx:
+        prob = float(probs6[i])
+        if prob < 1e-6:
+            continue
+
+        code = label_maps["y6"]["to_value"][int(i)]
+        pred_top5_y6.append({
+            "code": code,
+            "prob": prob,
+        })
+
+        if len(pred_top5_y6) == 5:
+            break
 
     return {
         "pred_y2": pred_y2,

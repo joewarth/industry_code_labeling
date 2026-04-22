@@ -52,7 +52,12 @@ def server(input, output, session):
             ui.h4("Confidence"),
             ui.p(f"6-digit confidence: {result['pred_prob_y6']:.4f}"),
             ui.h4("Top 5 6-digit predictions"),
-            ui.tags.ol(*[ui.tags.li(x) for x in result["pred_top5_y6"]]),
+            ui.tags.ol(
+                *[
+                    ui.tags.li(f"{item['code']} ({item['prob']:.4f})")
+                    for item in result["pred_top5_y6"]
+                ]
+            ),
         )
 
 
