@@ -4,6 +4,8 @@ This project builds and deploys a hierarchical machine learning model for predic
 
 The work began with a word-token CNN approach, then moved to a stronger sentence-embedding pipeline using pretrained transformer embeddings. The current best model uses MPNet sentence embeddings with a hierarchical PyTorch classifier that predicts NAICS codes from 2 digits through the full 6-digit code.
 
+A live dashboard utilizing the API that you can use to interact with my model is available [here](https://019db3be-81fa-ce38-110c-3c40da46c791.share.connect.posit.cloud/).
+
 ## Project goal
 
 The goal is to classify free-form business descriptions into 2022 NAICS codes using a strict hierarchy:
