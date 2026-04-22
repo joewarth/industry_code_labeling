@@ -1,0 +1,16 @@
+{
+  "batch_size": 64,
+  "epochs": 15,
+  "learning_rate": 0.0005,
+  "embed_dim": 128,
+  "num_filters": 128,
+  "hidden_dim": 256,
+  "parent_embed_dim": 32,
+  "dropout": 0.3,
+  "kernel_sizes": [
+    3,
+    4,
+    5
+  ],
+  "device": "cpu"
+}

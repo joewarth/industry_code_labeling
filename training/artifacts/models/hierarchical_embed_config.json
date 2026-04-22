@@ -1,0 +1,12 @@
+{
+  "batch_size": 64,
+  "epochs": 50,
+  "learning_rate": 0.001,
+  "early_stopping_patience": 3,
+  "hidden_dim": 768,
+  "parent_embed_dim": 64,
+  "dropout": 0.1,
+  "device": "cpu",
+  "embedder_model_name": "sentence-transformers/all-mpnet-base-v2",
+  "embedding_dim": 768
+}
