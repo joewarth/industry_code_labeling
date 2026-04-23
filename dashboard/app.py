@@ -47,14 +47,14 @@ def server(input, output, session):
                 ui.tags.li(f"3-digit: {result['pred_y3']}"),
                 ui.tags.li(f"4-digit: {result['pred_y4']}"),
                 ui.tags.li(f"5-digit: {result['pred_y5']}"),
-                ui.tags.li(f"6-digit: {result['pred_y6']}"),
+                ui.tags.li(f"6-digit: {result['pred_y6']} - {result['pred_y6_title']}"),
             ),
             ui.h4("Confidence"),
             ui.p(f"6-digit confidence: {result['pred_prob_y6']:.4f}"),
             ui.h4("Top 5 6-digit predictions"),
             ui.tags.ol(
                 *[
-                    ui.tags.li(f"{item['code']} ({item['prob']:.4f})")
+                    ui.tags.li(f"{item['code']} - {item['title']} ({item['prob']:.4f})")
                     for item in result["pred_top5_y6"]
                 ]
             ),

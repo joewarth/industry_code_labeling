@@ -7,6 +7,8 @@ RANDOM_STATE = 42
 VALID_SIZE = 0.15
 TEST_SIZE = 0.15
 
+NAICS_SAMPLE_N = 5000
+
 
 def clean_text(x):
     if pd.isna(x):
@@ -41,11 +43,9 @@ def clean_naics_2022(x):
 def split_one_class(group, valid_size=VALID_SIZE, test_size=TEST_SIZE, random_state=RANDOM_STATE):
     n = len(group)
 
-    # Very rare classes: keep entirely in train
     if n <= 2:
         return group, group.iloc[0:0].copy(), group.iloc[0:0].copy()
 
-    # Rare classes: allow validation, but no test
     if 3 <= n <= 5:
         train_part, valid_part = train_test_split(
             group,
@@ -54,7 +54,6 @@ def split_one_class(group, valid_size=VALID_SIZE, test_size=TEST_SIZE, random_st
         )
         return train_part, valid_part, group.iloc[0:0].copy()
 
-    # Common classes: full train/valid/test split
     train_valid_part, test_part = train_test_split(
         group,
         test_size=test_size,
@@ -72,15 +71,7 @@ def split_one_class(group, valid_size=VALID_SIZE, test_size=TEST_SIZE, random_st
     return train_part, valid_part, test_part
 
 
-def main():
-    project_dir = Path(__file__).resolve().parents[2]
-
-    raw_path = project_dir / "data" / "raw" / "exionaics_raw.csv"
-    interim_dir = project_dir / "data" / "interim"
-    interim_dir.mkdir(parents=True, exist_ok=True)
-
-    df = pd.read_csv(raw_path)
-
+def prep_exio_df(df):
     keep_cols = [
         "Company Name",
         "Company Description",
@@ -99,20 +90,97 @@ def main():
     }
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
+    if "company_name" not in df.columns:
+        df["company_name"] = None
+
+    if "naics_2022_title" not in df.columns:
+        df["naics_2022_title"] = None
+
     df["company_description"] = df["company_description"].apply(clean_text)
     df["naics_2022"] = df["naics_2022"].apply(clean_naics_2022)
 
-    if "company_name" in df.columns:
-        df["company_name"] = df["company_name"].apply(
-            lambda x: None if pd.isna(x) else str(x).strip()
-        )
+    df["company_name"] = df["company_name"].apply(
+        lambda x: None if pd.isna(x) else str(x).strip()
+    )
+    df["naics_2022_title"] = df["naics_2022_title"].apply(
+        lambda x: None if pd.isna(x) else str(x).strip()
+    )
 
-    if "naics_2022_title" in df.columns:
-        df["naics_2022_title"] = df["naics_2022_title"].apply(
-            lambda x: None if pd.isna(x) else str(x).strip()
-        )
+    df["data_source"] = "exionaics"
 
+    return df[[
+        "company_name",
+        "company_description",
+        "naics_2022",
+        "naics_2022_title",
+        "data_source",
+    ]].copy()
+
+
+def prep_supplement_df(df):
+    keep_cols = ["naics_code", "naics_title", "naics_description"]
+    existing_keep_cols = [c for c in keep_cols if c in df.columns]
+    df = df[existing_keep_cols].copy()
+
+    rename_map = {
+        "naics_code": "naics_2022",
+        "naics_title": "naics_2022_title",
+        "naics_description": "company_description",
+    }
+    df = df.rename(columns=rename_map)
+
+    df["company_name"] = None
+    df["company_description"] = df["company_description"].apply(clean_text)
+    df["naics_2022"] = df["naics_2022"].apply(clean_naics_2022)
+    df["naics_2022_title"] = df["naics_2022_title"].apply(
+        lambda x: None if pd.isna(x) else str(x).strip()
+    )
+
+    # only true full 6-digit codes
     df = df.dropna(subset=["company_description", "naics_2022"]).copy()
+    df = df[df["naics_2022"].str.fullmatch(r"\d{6}")].copy()
+
+    df["data_source"] = "naics_supplement"
+
+    return df[[
+        "company_name",
+        "company_description",
+        "naics_2022",
+        "naics_2022_title",
+        "data_source",
+    ]].copy()
+
+
+def main():
+    project_dir = Path(__file__).resolve().parents[2]
+
+    raw_dir = project_dir / "data" / "raw"
+    exio_path = raw_dir / "exionaics_raw.csv"
+    supplement_path = raw_dir / "2022_naics_supplemental.xlsx"
+
+    interim_dir = project_dir / "data" / "interim"
+    interim_dir.mkdir(parents=True, exist_ok=True)
+
+    exio_df = pd.read_csv(exio_path)
+    exio_df = prep_exio_df(exio_df)
+    exio_df = exio_df.dropna(subset=["company_description", "naics_2022"]).copy()
+
+    supplement_sample = pd.DataFrame(columns=exio_df.columns)
+
+    if NAICS_SAMPLE_N > 0 and supplement_path.exists():
+        supplement_df = pd.read_excel(supplement_path)
+        supplement_df = prep_supplement_df(supplement_df)
+
+        sample_n = min(NAICS_SAMPLE_N, len(supplement_df))
+        supplement_sample = supplement_df.sample(
+            n=NAICS_SAMPLE_N,
+            replace=True,
+            random_state=RANDOM_STATE
+        ).copy()
+
+        df = pd.concat([exio_df, supplement_sample], ignore_index=True)
+    else:
+        df = exio_df.copy()
 
     df["y2"] = df["naics_2022"].str[:2]
     df["y3"] = df["naics_2022"].str[:3]
@@ -172,10 +240,12 @@ def main():
     print(f"Class counts saved to: {counts_path}")
 
     print("\nShapes:")
-    print(f"Full:  {df.shape}")
-    print(f"Train: {train_df.shape}")
-    print(f"Valid: {valid_df.shape}")
-    print(f"Test:  {test_df.shape}")
+    print(f"ExioNAICS rows:          {exio_df.shape}")
+    print(f"Supplement sampled rows: {supplement_sample.shape}")
+    print(f"Full:                    {df.shape}")
+    print(f"Train:                   {train_df.shape}")
+    print(f"Valid:                   {valid_df.shape}")
+    print(f"Test:                    {test_df.shape}")
 
     print("\nUnique y6 counts:")
     print(f"Full:  {df['y6'].nunique()}")
@@ -187,11 +257,14 @@ def main():
     print(f"Valid y6 missing from train: {len(missing_valid)}")
     print(f"Test y6 missing from train:  {len(missing_test)}")
 
+    print("\nData source counts:")
+    print(df["data_source"].value_counts(dropna=False))
+
     print("\nSample rows:")
     print(train_df[[
-        "company_description", "naics_2022", "y2", "y3", "y4", "y5", "y6"
+        "company_description", "naics_2022", "y2", "y3", "y4", "y5", "y6", "data_source"
     ]].head())
-    
+
 
 if __name__ == "__main__":
     main()
